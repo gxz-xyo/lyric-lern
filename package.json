@@ -1,0 +1,14 @@
+{
+  "name": "discord-quest-tool",
+  "version": "1.0.0",
+  "description": "Auto complete Discord Orb quests via web UI",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.6.0",
+    "ws": "^8.14.2"
+  }
+}
