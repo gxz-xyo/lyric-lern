@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Discord Orb Quest Completer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #1a1b2f;
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      color: #e6edf3;
+    }
+    .container {
+      background: #2b2d42;
+      border-radius: 16px;
+      padding: 28px 30px;
+      width: 520px;
+      max-width: 98%;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+      border: 1px solid #3a3c5a;
+    }
+    h1 {
+      text-align: center;
+      font-size: 22px;
+      margin-bottom: 20px;
+      color: #8ea4d2;
+    }
+    .token-input {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+    .token-input input {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: none;
+      background: #1e1f33;
+      color: white;
+      font-size: 14px;
+    }
+    .token-input input::placeholder { color: #6a6c8a; }
+    .token-input button {
+      padding: 10px 20px;
+      background: #5865f2;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: .2s;
+    }
+    .token-input button:hover { background: #4752c4; }
+    #status {
+      text-align: center;
+      margin-bottom: 16px;
+      font-size: 14px;
+      color: #b0b3d1;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+    .actions button {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: .2s;
+      color: white;
+    }
+    .btn-start { background: #22c55e; }
+    .btn-start:hover { background: #1a9e4a; }
+    .btn-stop { background: #ef4444; }
+    .btn-stop:hover { background: #c72e2e; }
+    .btn-refresh { background: #6b7280; }
+    .btn-refresh:hover { background: #4b5563; }
+    #quest-list {
+      max-height: 340px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    #quest-list::-webkit-scrollbar { width: 4px; }
+    #quest-list::-webkit-scrollbar-thumb { background: #4a4c6a; border-radius: 4px; }
+    .quest-item {
+      background: #1e1f33;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      border-left: 4px solid #5865f2;
+      transition: .2s;
+    }
+    .quest-item.completed { border-left-color: #22c55e; opacity: 0.7; }
+    .quest-item.running { border-left-color: #fbbf24; }
+    .quest-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .quest-name { font-weight: 600; font-size: 14px; }
+    .quest-badge {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: #3a3c5a;
+      color: #b0b3d1;
+    }
+    .quest-progress {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #a0a3c0;
+      margin: 4px 0;
+    }
+    .progress-bar {
+      height: 6px;
+      background: #2b2d42;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: #5865f2;
+      border-radius: 4px;
+      transition: width .5s;
+    }
+    .quest-item.completed .progress-fill { background: #22c55e; }
+    .empty-msg {
+      text-align: center;
+      color: #6a6c8a;
+      padding: 30px 0;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>🎯 Orb Quest Completer</h1>
+  <div class="token-input">
+    <input type="text" id="tokenInput" placeholder="Nhập token Discord...">
+    <button id="loginBtn">Xác nhận</button>
+  </div>
+  <div id="status">Chưa đăng nhập</div>
+
+  <div class="actions">
+    <button class="btn-start" id="startBtn">▶ Bắt đầu</button>
+    <button class="btn-stop" id="stopBtn">⏹ Dừng</button>
+    <button class="btn-refresh" id="refreshBtn">⟳ Làm mới</button>
+  </div>
+
+  <div id="quest-list">
+    <div class="empty-msg">Đăng nhập để hiển thị quest</div>
+  </div>
+</div>
+
+<script>
+  const tokenInput = document.getElementById('tokenInput');
+  const loginBtn = document.getElementById('loginBtn');
+  const statusDiv = document.getElementById('status');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const refreshBtn = document.getElementById('refreshBtn');
+  const questList = document.getElementById('quest-list');
+
+  let ws = null;
+
+  function connectWebSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${protocol}//${window.location.host}`);
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      if (data.type === 'progress' || data.type === 'completed' || data.type === 'done' || data.type === 'error') {
+        fetchQuests();
+      }
+    };
+    ws.onclose = () => setTimeout(connectWebSocket, 2000);
+  }
+  connectWebSocket();
+
+  async function fetchQuests() {
+    try {
+      const res = await fetch('/api/quests');
+      if (!res.ok) throw new Error('Not logged in');
+      const data = await res.json();
+      renderQuests(data.quests);
+    } catch (err) {
+      questList.innerHTML = `<div class="empty-msg">${err.message}</div>`;
+    }
+  }
+
+  function renderQuests(quests) {
+    if (!quests || quests.length === 0) {
+      questList.innerHTML = `<div class="empty-msg">Không có quest nào đang chờ</div>`;
+      return;
+    }
+    let html = '';
+    quests.forEach(q => {
+      const pct = q.needed > 0 ? Math.min(100, Math.round((q.done / q.needed) * 100)) : 0;
+      const statusClass = q.completed ? 'completed' : (q.running ? 'running' : '');
+      html += `
+        <div class="quest-item ${statusClass}">
+          <div class="quest-header">
+            <span class="quest-name">${q.name}</span>
+            <span class="quest-badge">${q.task}</span>
+          </div>
+          <div class="quest-progress">
+            <span>${q.done}s / ${q.needed}s</span>
+            <span>${pct}%</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" style="width:${pct}%"></div>
+          </div>
+        </div>
+      `;
+    });
+    questList.innerHTML = html;
+  }
+
+  loginBtn.onclick = async () => {
+    const token = tokenInput.value.trim();
+    if (!token) return alert('Vui lòng nhập token');
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      });
+      const data = await res.json();
+      if (data.success) {
+        statusDiv.textContent = `✅ Đã đăng nhập: ${data.username}`;
+        fetchQuests();
+      } else {
+        statusDiv.textContent = '❌ Token không hợp lệ';
+      }
+    } catch (err) {
+      statusDiv.textContent = '❌ Lỗi kết nối';
+    }
+  };
+
+  startBtn.onclick = async () => {
+    try {
+      const res = await fetch('/api/start', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) statusDiv.textContent = '🔄 Đang chạy...';
+      fetchQuests();
+    } catch (err) {
+      alert('Lỗi khi bắt đầu');
+    }
+  };
+
+  stopBtn.onclick = async () => {
+    try {
+      await fetch('/api/stop', { method: 'POST' });
+      statusDiv.textContent = '⏹ Đã dừng';
+      fetchQuests();
+    } catch (err) {
+      alert('Lỗi khi dừng');
+    }
+  };
+
+  refreshBtn.onclick = fetchQuests;
+
+  // Tự động fetch mỗi 15s
+  setInterval(fetchQuests, 15000);
+</script>
+</body>
+</html>
